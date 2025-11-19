@@ -9,7 +9,7 @@ This is the official release of the training code for the Location-Aware Pre-tra
 Git clone our repository, create a python environment and activate it via the command
 
 ```bash
-git clone https:...git
+git clone https://github.com/MusinguziDenis/Location-Aware-Pre-training-for-Medical-Difference-VQA.git
 cd "Location-Aware Pre-training for Medical Difference VQA"
 conda env create -f environment.yml
 conda activate lloca
