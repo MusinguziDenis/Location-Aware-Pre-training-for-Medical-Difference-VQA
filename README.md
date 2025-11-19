@@ -36,14 +36,6 @@ After the finetuning, you can run inference on the model using the following cod
 ```bash
 python inference.py --model-checkpoint --prompt "What has changed compared to the reference image?" --main-image-path "path-to-main-image" --ref-image-path "path-to-ref-image" --max-tokens-to-generate 64 --temperature 0.2 --top-k 20
 ```
-If you're using Location-Aware Pretraining for Medical Difference VQA in your research or applications, please cit using this BibTex
-```
-@article{musinguzi2025locca,
-    title={Location-Aware Pre-training for Medical Difference VQA},
-    author={Musinguzi, Denis and Mitra, Prasenjit}},
-    journal={arXiv preprint arXiv:}
-    year={2025}
-```
 
 #### License
 This repository is under the MIT License - see the [LICENSE](LICENSE) file for details.
