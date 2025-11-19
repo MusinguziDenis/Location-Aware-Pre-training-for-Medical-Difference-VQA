@@ -10,24 +10,6 @@ from torch import nn
 
 
 @dataclass
-class SiglipTextConfig:
-    vocab_size: int = 32000
-    hidden_size: int = 1152
-    intermediate_size: int = 4304
-    num_hidden_layers: int = 27
-    num_attention_heads: int = 12
-    max_position_embeddings: int = 64
-    hidden_act: str = "gelu_pytorch_tanh"
-    layer_norm_eps: float = 1e-6
-    attention_dropout: float = 0.0
-    pad_token_id: int = 1
-    bos_token_id: int = 49406
-    eos_token_id: int = 49407
-    projection_size: int = 1152
-    _attn_implementation: str = "flash"
-
-
-@dataclass
 class SiglipVisionConfig:
     hidden_size: int = 1152
     intermediate_size: int = 4304
@@ -41,18 +23,6 @@ class SiglipVisionConfig:
     attention_dropout: float = 0.0
     projection_dim: int = 1280
     vision_use_head: bool = False
-
-
-class SiglipTextModelOutput:
-    r"""
-    text_embeds (`torch.FloatTensor` of shape `(batch_size, output_dim)` *optional* returned when model is initialized with `with_projection=True`):
-        The text embeddings obtained by applying the projection layer to the pooler_output.
-    """
-
-    text_embeds: Optional[torch.FloatTensor] = None
-    last_hidden_state: Optional[torch.FloatTensor] = None
-    hidden_states: Optional[tuple[torch.FloatTensor, ...]] = None
-    attentions: Optional[tuple[torch.FloatTensor, ...]] = None
 
 
 class SiglipVisionEmbeddings(nn.Module):
@@ -87,43 +57,6 @@ class SiglipVisionEmbeddings(nn.Module):
         embeddings = embeddings + self.position_embedding(self.position_ids) # [:, :embeddings.shape[1]]
         return embeddings
 
-
-class SiglipTextEmbeddings(nn.Module):
-    def __init__(self, config: SiglipTextConfig):
-        super().__init__()
-        embed_dim = config.hidden_size
-        self.token_embedding = nn.Embedding(config.vocab_size, embed_dim)
-        self.position_embedding = nn.Embedding(config.max_position_embeddings, embed_dim)
-
-        self.register_buffer(
-            "position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
-        )
-
-    def forward(
-            self,
-            input_ids: Optional[torch.LongTensor] = None,
-            position_ids: Optional[torch.LongTensor] = None,
-            input_embeds: Optional[torch.FloatTensor] = None,
-    ) -> torch.Tensor:
-        seq_length = input_ids.shape[-1] if input_ids is not None else input_embeds.shape[-2]
-        max_position_embedding = self.position_embedding.weight.shape[0]
-
-        if seq_length > max_position_embedding:
-            raise ValueError(
-                f"Sequence length must be less than max_position_embeddings (got `sequence length`: "
-                f"{seq_length} and max_position_embeddings: {max_position_embedding}"
-            )
-
-        if position_ids is None:
-            position_ids = self.position_ids[:, :seq_length]
-
-        if input_embeds is None:
-            input_embeds = self.token_embedding(input_ids)
-
-        position_embeddings = self.position_embedding(position_ids)
-        embeddings = input_embeds + position_embeddings
-
-        return embeddings
 
 def eager_attention_forward(
         module: nn.Module,
@@ -223,7 +156,7 @@ class SiglipMLP(nn.Module):
 
 
 class SiglipEncoderLayer(nn.Module):
-    def __init__(self, config: Union[SiglipTextConfig]):
+    def __init__(self, config: Union[SiglipVisionConfig]):
         super().__init__()
         self.embed_dim = config.hidden_size
         self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=config.layer_norm_eps)
@@ -285,56 +218,6 @@ class SiglipEncoder(nn.Module):
         return hidden_states
 
 
-class SiglipTextTransformer(nn.Module):
-    def __init__(self, config: SiglipTextConfig):
-        super().__init__()
-        self.config = config
-        embed_dim = config.hidden_size
-        self.embeddings = SiglipTextEmbeddings(config)
-        self.encoder = SiglipEncoder(config)
-        self.final_layer_norm = nn.LayerNorm(embed_dim, eps=config.layer_norm_eps)
-
-        self.head = nn.Linear(embed_dim, config.projection_size)
-
-    def forward(
-        self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        **kwargs,
-    ):
-        if input_ids is None:
-            raise ValueError("You have to specify input_ids")
-
-        input_shape = input_ids.size()
-        input_ids = input_ids.view(-1, input_shape[-1])
-
-        hidden_states = self.embeddings(input_ids=input_ids, position_ids=position_ids)
-
-        # Siglip text model does not use a causal mask
-        uses_flash_attention = "flash" in self.config._attn_implementation
-        if uses_flash_attention:
-            attention_mask = None
-        elif attention_mask is not None and not uses_flash_attention:
-            # [batch_size, seq_len] -> [batch_size, 1, tgt_seq_len, src_seq_len]
-            attention_mask = _prepare_4d_attention_mask(attention_mask, hidden_states.dtype)
-
-        encoder_outputs = self.encoder(
-            input_embeds=hidden_states,
-            attention_mask=attention_mask,
-            **kwargs
-        )
-
-        last_hidden_state = encoder_outputs
-        last_hidden_state = self.final_layer_norm(last_hidden_state)
-
-        # the models use the last token's hidden state, which may be padding
-        pooled_output = last_hidden_state[:, -1, :]
-        pooled_output = self.head(pooled_output)
-
-        return hidden_states, pooled_output
-
-
 class SiglipVisionTransformer(nn.Module):
     def __init__(self, config: SiglipVisionConfig):
         super().__init__()
@@ -387,137 +270,3 @@ class SiglipVisionModel(nn.Module):
 
     def forward(self, pixel_values) -> Tuple:
         return self.vision_model(pixel_values=pixel_values)
-
-
-class SiglipTextModel(nn.Module):
-    config: SiglipTextConfig
-
-    def __init__(self, config: SiglipTextConfig):
-        super().__init__()
-        self.text_model = SiglipTextTransformer(config)
-        
-    def get_input_enbeddings(self) -> nn.Module:
-        return self.text_model.embeddings.token_embedding
-
-    def set_input_embeddings(self, value):
-        self.text_model.embeddings.token_embedding = value
-
-    def forward(
-        self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        **kwargs,
-    ):
-        r"""
-        Examples:
-
-        ```python
-        >>> from transformers import AutoTokenizer, SiglipTextModel
-
-        >>> model = SiglipTextModel.from_pretrained("google/siglip-base-patch16-224")
-        >>> tokenizer = AutoTokenizer.from_pretrained("google/siglip-base-patch16-224")
-
-        >>> # important: make sure to set padding="max_length" as that's how the model was trained
-        >>> inputs = tokenizer(["a photo of a cat", "a photo of a dog"], padding="max_length", return_tensors="pt")
-
-        >>> outputs = model(**inputs)
-        >>> last_hidden_state = outputs.last_hidden_state
-        >>> pooled_output = outputs.pooler_output  # pooled (EOS token) states
-        """
-
-        return self.text_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            **kwargs,
-        )
-
-
-class SiglipModel(nn.Module):
-    def __init__(self, text_config: SiglipTextConfig, vision_config: SiglipVisionConfig):
-        super().__init__()
-        text_model = SiglipTextModel(text_config)
-        vision_model = SiglipVisionModel(vision_config)
-
-        self.text_model = text_model.text_model
-        self.vision_model = vision_model.vision_model
-
-        self.logit_scale = nn.Parameter(torch.log(torch.ones((1))*10))
-        self.logit_bias  = nn.Parameter(torch.ones((1))*-10)
-
-    def get_text_features(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor],
-        position_ids: Optional[torch.Tensor],
-    ):
-        text_outputs = self.text_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-        )
-        return text_outputs
-    
-    def get_image_features(
-            self,
-            pixel_values: torch.FloatTensor,
-    ) -> torch.Tensor:
-        vision_outputs = self.vision_model(
-            pixel_values=pixel_values,
-        )
-        return vision_outputs
-    
-
-    def forward(
-            self,
-            input_ids: Optional[torch.LongTensor],
-            pixel_values: Optional[torch.FloatTensor],
-            attention_mask: Optional[torch.FloatTensor]=None,
-            position_ids: Optional[torch.LongTensor]=None,
-    ):
-        _, image_embeds = self.vision_model(
-            pixel_values=pixel_values,
-        )
-        _, text_embeds = self.text_model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-        )
-
-        # normalized features
-        image_embeds = image_embeds / image_embeds.norm(p=2, dim=-1, keepdim=True)
-        text_embeds = text_embeds / text_embeds.norm(p=2, dim=-1, keepdim=True)
-
-        # cosine similarity as logits
-        logits_per_text = torch.matmul(text_embeds, image_embeds.t().to(text_embeds.device))
-
-        logit_scale, logits_bias = self.logit_scale.to(text_embeds.device), self.logit_bias.to(text_embeds.device)
-        logits_per_text = logits_per_text * logit_scale.exp() + logits_bias
-
-        logits_per_image = logits_per_text.t()
-
-        eye = torch.eye(logits_per_text.size(0), device=logits_per_text.device)
-        m1_diag1 = -torch.ones_like(logits_per_text) + 2 * eye
-        loglik = nn.functional.logsigmoid(m1_diag1 * logits_per_text)
-        nll = -torch.sum(loglik, dim=-1)
-        loss = nll.mean()
-
-        return loss
-
-    @classmethod
-    def from_pretrained(cls, model_name):
-        assert model_name in ["google/medsiglip-448"], f"The model you stated {model_name} is not supported."
-        from transformers import AutoModel
-        print("loading weights from pretrained: %s" %model_name)
-
-        text_config = SiglipTextConfig()
-        vision_config = SiglipVisionConfig()
-
-        model = SiglipModel(text_config=text_config, vision_config=vision_config)
-        hf_model = AutoModel.from_pretrained(model_name)
-        sd_hf_model = hf_model.state_dict()
-
-        model.load_state_dict(sd_hf_model)
-
-        return model
