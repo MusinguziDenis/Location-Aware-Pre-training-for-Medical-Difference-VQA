@@ -1,6 +1,6 @@
 # Location-Aware Pre-training for Medical Difference VQA
 
-This is the official release of the training code for the Location-Aware Pre-training for Medical Difference VQA paper.
+This is the official release of the training code for the [Location-Aware-Pretraining-For-Medical-Difference-VQA.pdf](Location-Aware-Pretraining-For) paper.
 
 ## Getting Started
 ### Installation
@@ -39,3 +39,5 @@ python inference.py --model-checkpoint --prompt "What has changed compared to th
 
 #### License
 This repository is under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+#### Paper
