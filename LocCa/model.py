@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import ViTModel, ViTConfig
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from PIL import Image
 from data import image_transforms
 

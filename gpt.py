@@ -4,9 +4,7 @@ GPT2 is the text extractor for the mm model.
 """
 
 import math
-import inspect
 from dataclasses import dataclass
-from typing import Optional
 
 import torch
 import torch.nn as nn

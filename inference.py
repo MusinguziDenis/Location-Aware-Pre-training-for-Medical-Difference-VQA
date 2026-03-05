@@ -1,4 +1,3 @@
-from processor import Processor
 from diff_vlm import DiffVLM, VLMConfig
 import argparse
 

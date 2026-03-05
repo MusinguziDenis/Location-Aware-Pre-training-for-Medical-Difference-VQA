@@ -2,10 +2,14 @@ import os
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from torch.utils.data import ConcatDataset
 import torch
+import wandb
 
+from transformers import GPT2Tokenizer
 from data import LocCaDataset, get_dataloader, image_transforms
+from model import LocCaVLM, DecoderConfig
+from data import train_collate_fn, test_collate_fn
+from train import train, validation
 
 # set the device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -20,13 +24,11 @@ config = dict(
     epochs=2,
     dataset="combined-dataset",
     parallel_ratio=0.25,
-    image_size=224,
+    image_size=224, 
 )
 
 # Create tokenizer
 # Create Tokenizer
-from transformers import GPT2Tokenizer
-
 tokenizer = tokenizer = GPT2Tokenizer.from_pretrained("openai-community/gpt2")
 tokenizer.pad_token = tokenizer.eos_token
 
@@ -55,7 +57,6 @@ test_dataset = LocCaDataset(
 )
 
 # Dataloader
-from data import train_collate_fn, test_collate_fn
 
 train_dataloader = get_dataloader(
     dataset=train_dataset,
@@ -82,8 +83,6 @@ test_dataloader = get_dataloader(
 )
 
 # Model
-from model import LocCaVLM, DecoderConfig
-
 decoder_config = DecoderConfig(tokenizer=tokenizer)
 model = LocCaVLM(decoder_config)
 
@@ -92,14 +91,10 @@ model = model.to(torch.bfloat16).to(device)
 torch.compile(model)
 
 # Train & Validation
-from train import train, validation
-
 optimizer = torch.optim.AdamW(model.parameters(), lr=config["lr"], betas=(0.9, 0.95), weight_decay=1e-2)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"], eta_min=0)
 
 # Weights & Biases
-import wandb
-
 wandb.login()
 
 run = wandb.init(
@@ -151,4 +146,3 @@ for epoch in range(config['epochs']):
     print(response)
 
 run.finish()
-

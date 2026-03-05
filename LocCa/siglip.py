@@ -1,10 +1,7 @@
 from dataclasses import dataclass 
-import math
-import warnings
 from collections.abc import Callable
-from typing import Any, Optional, Union, Tuple
+from typing import Optional, Union, Tuple
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -50,7 +47,6 @@ class SiglipVisionEmbeddings(nn.Module):
         )
 
     def forward(self, pixel_values: torch.FloatTensor) -> torch.Tensor:
-        # _, _, height, width = pixel_values.shape
         patch_embeds = self.patch_embedding(pixel_values)
         embeddings = patch_embeds.flatten(2)
         embeddings = embeddings.transpose(1, 2)
@@ -250,7 +246,7 @@ class SiglipMultiheadAttentionPoolingHead(nn.Module):
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: torch.Tensor):
         batch_size = hidden_states.size(0)
         probe = self.probe.repeat(batch_size, 1, 1)
         hidden_states = self.attention(probe, hidden_states, hidden_states)[0]

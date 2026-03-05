@@ -2,17 +2,14 @@
 Implementation of the differential multimodal model
 """
 
-from gpt import GPT, GPT2Config
+from gpt import GPT
 from LocCa.siglip import SiglipVisionModel, SiglipVisionConfig
-from medsiglip_hf import MedSiglipVisionModel
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
-import timm
 from typing import Tuple
 from PIL import Image
 from torchvision.transforms import transforms
-from transformers import AutoModel
 import inspect
 from dataclasses import dataclass
 
