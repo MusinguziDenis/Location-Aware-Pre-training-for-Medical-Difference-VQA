@@ -1,6 +1,6 @@
 # Location-Aware Pre-training for Medical Difference VQA
 
-This is the official release of the training code for the [Location-Aware-Pretraining-For-Medical-Difference-VQA.pdf](Location-Aware-Pretraining-For) paper.
+This is the official release of the training code for the [Location-Aware Pretraining for Medical Difference Visual Question Answering](Location-Aware-Pretraining-For-Medical-Difference-VQA.pdf) paper.
 
 ## Getting Started
 ### Installation
